@@ -1,18 +1,20 @@
 # cruise-data-lug
 
-CLI tool that downloads water column, trackline, or bathy data from the NOAA hosted NODD cloud buckets given a survey name or root directory path
+CLI tool for downloading marine geophysics survey data from the NOAA Open Data Dissemenation (NODD) hosted cloud.
 
 ## installation
 
+TODO -- https://goreleaser.com/customization/builds/go/
+
 ## usage
 
-clug 
-(wcd | bathy | trackline)
-(survey <> | path <> | all)
+clug <command> <options> <survey> <local_path>
 
-glance
-list
+Commands
 get
-config 
-(bucket)
+config
+update
 
+Options
+-b | --bathy: downloads bathymetry data from specified survey
+-s | --summary: provides a summary of the survey request instead of download
