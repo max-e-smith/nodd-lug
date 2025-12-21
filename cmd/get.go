@@ -93,18 +93,20 @@ func diskSpaceCheck(rootPaths []string) {
 }
 
 func resolveBathySurveys(surveys []string) []string {
+	var surveyPaths []string
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
 		config.WithRegion("us-east-1"),
 	)
 	if err != nil {
 		log.Fatal(err)
-		return []string{}
+		return surveyPaths
 	}
 
 	client := s3.NewFromConfig(cfg)
 
-	// noaa-dcdb-bathymetry-pds.s3.amazonaws.com
+	// noaa-dcdb-bathymetry-pds.s3.amazonaws.com/index.html
 	bucket := "noaa-dcdb-bathymetry-pds"
 
 	pt, ptErr := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
@@ -115,56 +117,55 @@ func resolveBathySurveys(surveys []string) []string {
 
 	if ptErr != nil {
 		log.Fatal(err)
-		return []string{}
+		return surveyPaths
 	}
 
 	for _, platformType := range pt.CommonPrefixes {
-		//fmt.Printf("scanning %s\n", *platformType.Prefix)
 
-		platformResults, pErr := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		platformParams := &s3.ListObjectsV2Input{
 			Bucket:    aws.String(bucket),
 			Prefix:    aws.String(*platformType.Prefix),
 			Delimiter: aws.String("/"),
-		})
-
-		if pErr != nil {
-			log.Fatal(err)
-			return []string{}
 		}
 
-		for _, platform := range platformResults.CommonPrefixes {
-			fmt.Printf("..scanning %s\n", *platform.Prefix)
+		allPlatforms := s3.NewListObjectsV2Paginator(client, platformParams)
 
-			params := &s3.ListObjectsV2Input{
-				Bucket:    aws.String(bucket),
-				Prefix:    aws.String(*platform.Prefix),
-				Delimiter: aws.String("/"),
+		for allPlatforms.HasMorePages() {
+			platsPage, platsErr := allPlatforms.NextPage(context.TODO())
+
+			if platsErr != nil {
+				log.Fatal(err)
+				return []string{}
 			}
+			for _, platform := range platsPage.CommonPrefixes {
+				fmt.Printf("..scanning %s\n", *platform.Prefix)
 
-			paginator := s3.NewListObjectsV2Paginator(client, params)
-
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(context.TODO())
-				if err != nil {
-					log.Fatal(err)
-					return []string{}
+				platformParams := &s3.ListObjectsV2Input{
+					Bucket:    aws.String(bucket),
+					Prefix:    aws.String(*platform.Prefix),
+					Delimiter: aws.String("/"),
 				}
 
-				for _, survey := range page.CommonPrefixes {
-					fmt.Printf(" - %s\n", *survey.Prefix)
+				platformPaginator := s3.NewListObjectsV2Paginator(client, platformParams)
+
+				for platformPaginator.HasMorePages() {
+					surveysPage, err := platformPaginator.NextPage(context.TODO())
+					if err != nil {
+						log.Fatal(err)
+						return []string{}
+					}
+
+					for _, survey := range surveysPage.CommonPrefixes {
+						fmt.Printf(" - %s\n", *survey.Prefix)
+					}
 				}
-
 			}
-
 		}
-
 	}
-
-	var paths []string
 
 	//for _, object := range result.Contents {
 	//	log.Printf("key=%s size=%d", aws.ToString(object.Key), *object.Size)
 	//}
 
-	return paths
+	return surveyPaths
 }
