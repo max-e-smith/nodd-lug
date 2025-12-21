@@ -119,11 +119,11 @@ func resolveBathySurveys(surveys []string) []string {
 	}
 
 	for _, platformType := range pt.CommonPrefixes {
-		fmt.Printf("scanning - %s\n platform types", *platformType.Prefix)
+		//fmt.Printf("scanning %s\n", *platformType.Prefix)
 
 		platformResults, pErr := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket:    aws.String(bucket),
-			Prefix:    aws.String("mb/ships/"),
+			Prefix:    aws.String(*platformType.Prefix),
 			Delimiter: aws.String("/"),
 		})
 
@@ -132,10 +132,30 @@ func resolveBathySurveys(surveys []string) []string {
 			return []string{}
 		}
 
-		log.Println("first page results:")
-
 		for _, platform := range platformResults.CommonPrefixes {
-			fmt.Printf(" - %s\n", *platform.Prefix)
+			fmt.Printf("..scanning %s\n", *platform.Prefix)
+
+			params := &s3.ListObjectsV2Input{
+				Bucket:    aws.String(bucket),
+				Prefix:    aws.String(*platform.Prefix),
+				Delimiter: aws.String("/"),
+			}
+
+			paginator := s3.NewListObjectsV2Paginator(client, params)
+
+			for paginator.HasMorePages() {
+				page, err := paginator.NextPage(context.TODO())
+				if err != nil {
+					log.Fatal(err)
+					return []string{}
+				}
+
+				for _, survey := range page.CommonPrefixes {
+					fmt.Printf(" - %s\n", *survey.Prefix)
+				}
+
+			}
+
 		}
 
 	}
