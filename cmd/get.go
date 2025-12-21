@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/spf13/cobra"
 	"log"
+	"path"
+	"strings"
 )
 
 var bathy bool
@@ -66,6 +68,9 @@ func download(surveys []string, path string) {
 		if len(surveyRoots) == 0 {
 			fmt.Println("No surveys found.")
 			return
+		} else {
+			fmt.Printf("Found %d surveys: %s\n", len(surveyRoots), surveyRoots)
+			// TODO additional verification of survey match results
 		}
 
 		fmt.Println("checking available disk space")
@@ -92,8 +97,10 @@ func diskSpaceCheck(rootPaths []string) {
 	// TODO
 }
 
-func resolveBathySurveys(surveys []string) []string {
+func resolveBathySurveys(inputSurveys []string) []string {
 	var surveyPaths []string
+	wantedSurveys := len(inputSurveys)
+	foundSurveys := 0
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
@@ -138,7 +145,7 @@ func resolveBathySurveys(surveys []string) []string {
 				return []string{}
 			}
 			for _, platform := range platsPage.CommonPrefixes {
-				fmt.Printf("..scanning %s\n", *platform.Prefix)
+				fmt.Printf("  searching %s\n", *platform.Prefix)
 
 				platformParams := &s3.ListObjectsV2Input{
 					Bucket:    aws.String(bucket),
@@ -156,8 +163,17 @@ func resolveBathySurveys(surveys []string) []string {
 					}
 
 					for _, survey := range surveysPage.CommonPrefixes {
-						fmt.Printf(" - %s\n", *survey.Prefix)
+						surveyPrefix := *survey.Prefix
+						survey := path.Base(strings.TrimRight(surveyPrefix, "/"))
+						if isSurveyMatch(inputSurveys, survey) {
+							surveyPaths = append(surveyPaths, surveyPrefix)
+							foundSurveys++
+						}
 					}
+
+				}
+				if wantedSurveys == foundSurveys {
+					return surveyPaths
 				}
 			}
 		}
@@ -168,4 +184,14 @@ func resolveBathySurveys(surveys []string) []string {
 	//}
 
 	return surveyPaths
+}
+
+func isSurveyMatch(surveys []string, resolvedSurvey string) bool {
+	for _, survey := range surveys {
+		if survey == resolvedSurvey {
+			fmt.Println("Found matching survey: ", survey)
+			return true
+		}
+	}
+	return false
 }
