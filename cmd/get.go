@@ -24,6 +24,9 @@ var bathy bool
 var wcd bool
 var trackline bool
 
+var s3client s3.Client
+var bucket = "noaa-dcdb-bathymetry-pds" // noaa-dcdb-bathymetry-pds.s3.amazonaws.com/index.html
+
 const GB = 1000 * 1000 * 1000
 const GiB = 1024 * 1024 * 1024
 
@@ -67,6 +70,18 @@ func init() {
 	getCmd.Flags().BoolVarP(&wcd, "water-column", "w", false, "Download water column data")
 	getCmd.Flags().BoolVarP(&trackline, "trackline", "t", false, "Download trackline data")
 
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
+		config.WithRegion("us-east-1"),
+	)
+
+	if err != nil {
+		fmt.Printf("Error loading AWS config: %s\n", err)
+		fmt.Println("Failed to download bathy surveys.")
+		return
+	}
+
+	s3client = *s3.NewFromConfig(cfg)
 }
 
 func download(surveys []string, targetPath string) {
@@ -136,13 +151,13 @@ func getAvailableDiskSpace(localPath string) uint64 {
 	return usage.Available() // bytes
 }
 
-func diskSpaceCheck(rootPaths []string, targetPath string, client s3.Client, bucket string) bool {
+func diskSpaceCheck(rootPaths []string, targetPath string) bool {
 	var totalSurveysSize int64 = 0
 	availableSpace := getAvailableDiskSpace(targetPath)
 
 	for _, surveyRootPath := range rootPaths {
 		// TODO paginate
-		result, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		result, err := s3client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(bucket),
 			Prefix: aws.String(surveyRootPath),
 		})
@@ -180,24 +195,8 @@ func downloadBathySurveys(surveys []string, targetPath string) {
 	start := time.Now()
 	defer stopDownloadTimer(start)
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
-		config.WithRegion("us-east-1"),
-	)
-
-	if err != nil {
-		fmt.Printf("Error loading AWS config: %s\n", err)
-		fmt.Println("Failed to download bathy surveys.")
-		return
-	}
-
-	client := s3.NewFromConfig(cfg)
-
-	// noaa-dcdb-bathymetry-pds.s3.amazonaws.com/index.html
-	bucket := "noaa-dcdb-bathymetry-pds"
-
 	fmt.Println("Resolving bathymetry data for specified surveys: ", surveys)
-	var surveyRoots = resolveBathySurveys(surveys, *client, bucket)
+	var surveyRoots = resolveBathySurveys(surveys)
 
 	if len(surveyRoots) == 0 {
 		fmt.Println("No surveys found.")
@@ -208,18 +207,18 @@ func downloadBathySurveys(surveys []string, targetPath string) {
 	}
 
 	fmt.Println("Checking available disk space")
-	if !diskSpaceCheck(surveyRoots, targetPath, *client, bucket) {
+	if !diskSpaceCheck(surveyRoots, targetPath) {
 		fmt.Println("Specified path does not have enough disk space available.")
 		return
 	}
 
 	fmt.Printf("Downloading survey files to %s...\n", targetPath)
-	downloadFiles(surveyRoots, targetPath, bucket, *client)
+	downloadFiles(surveyRoots, targetPath)
 
 	fmt.Println("bathymetry data downloaded.")
 }
 
-func downloadFiles(prefixes []string, targetDir string, bucket string, client s3.Client) {
+func downloadFiles(prefixes []string, targetDir string) {
 	for _, survey := range prefixes {
 		var fileDownloadPageSize int32 = 10
 
@@ -229,7 +228,7 @@ func downloadFiles(prefixes []string, targetDir string, bucket string, client s3
 			MaxKeys: aws.Int32(fileDownloadPageSize),
 		}
 
-		filePaginator := s3.NewListObjectsV2Paginator(&client, params)
+		filePaginator := s3.NewListObjectsV2Paginator(&s3client, params)
 		for filePaginator.HasMorePages() {
 			page, err := filePaginator.NextPage(context.TODO())
 			if err != nil {
@@ -240,7 +239,7 @@ func downloadFiles(prefixes []string, targetDir string, bucket string, client s3
 			var wg sync.WaitGroup
 			for _, object := range page.Contents {
 				wg.Add(1)
-				go DownloadLargeObject(bucket, *object.Key, client, path.Join(targetDir, *object.Key), &wg)
+				go DownloadLargeObject(*object.Key, s3client, path.Join(targetDir, *object.Key), &wg)
 			}
 			wg.Wait()
 		}
@@ -274,7 +273,7 @@ func byteToGB(bytes int64) float64 {
 }
 
 func minutesSince(start time.Time) float64 {
-	seconds := time.Since(start).Seconds()
+	seconds := time.Since(start).Minutes()
 	return math.Trunc(seconds*100) / 100
 }
 
@@ -283,7 +282,7 @@ func hoursSince(start time.Time) float64 {
 	return math.Trunc(seconds*100) / 100
 }
 
-func DownloadLargeObject(bucketName string, objectKey string, client s3.Client, targetFile string, wg *sync.WaitGroup) {
+func DownloadLargeObject(objectKey string, client s3.Client, targetFile string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	file, err := createFileWithParents(targetFile)
@@ -297,7 +296,7 @@ func DownloadLargeObject(bucketName string, objectKey string, client s3.Client, 
 
 	downloader := manager.NewDownloader(&client)
 	n, err := downloader.Download(context.TODO(), file, &s3.GetObjectInput{
-		Bucket: aws.String(bucketName),
+		Bucket: aws.String(bucket),
 		Key:    aws.String(objectKey),
 	})
 
@@ -310,12 +309,12 @@ func DownloadLargeObject(bucketName string, objectKey string, client s3.Client, 
 	return
 }
 
-func resolveBathySurveys(inputSurveys []string, client s3.Client, bucket string) []string {
+func resolveBathySurveys(inputSurveys []string) []string {
 	var surveyPaths []string
 	wantedSurveys := len(inputSurveys)
 	foundSurveys := 0
 
-	pt, ptErr := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+	pt, ptErr := s3client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket:    aws.String(bucket),
 		Prefix:    aws.String("mb/"),
 		Delimiter: aws.String("/"),
@@ -334,7 +333,7 @@ func resolveBathySurveys(inputSurveys []string, client s3.Client, bucket string)
 			Delimiter: aws.String("/"),
 		}
 
-		allPlatforms := s3.NewListObjectsV2Paginator(&client, platformParams)
+		allPlatforms := s3.NewListObjectsV2Paginator(&s3client, platformParams)
 
 		for allPlatforms.HasMorePages() {
 			platsPage, platsErr := allPlatforms.NextPage(context.TODO())
@@ -352,7 +351,7 @@ func resolveBathySurveys(inputSurveys []string, client s3.Client, bucket string)
 					Delimiter: aws.String("/"),
 				}
 
-				platformPaginator := s3.NewListObjectsV2Paginator(&client, platformParams)
+				platformPaginator := s3.NewListObjectsV2Paginator(&s3client, platformParams)
 
 				for platformPaginator.HasMorePages() {
 					surveysPage, err := platformPaginator.NextPage(context.TODO())
