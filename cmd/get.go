@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var bathy bool
@@ -209,23 +210,29 @@ func downloadBathySurveys(surveys []string, targetPath string) {
 
 func downloadFiles(prefixes []string, targetDir string, bucket string, client s3.Client) {
 	for _, survey := range prefixes {
+		var fileDownloadPageSize int32 = 4
+
 		params := &s3.ListObjectsV2Input{
-			Bucket: aws.String(bucket),
-			Prefix: aws.String(survey),
+			Bucket:  aws.String(bucket),
+			Prefix:  aws.String(survey),
+			MaxKeys: aws.Int32(fileDownloadPageSize),
 		}
 
 		filePaginator := s3.NewListObjectsV2Paginator(&client, params)
 		for filePaginator.HasMorePages() {
 			page, err := filePaginator.NextPage(context.TODO())
+			fmt.Printf("downloading %d files...\n", len(page.Contents))
 			if err != nil {
 				log.Fatal(err)
 				return
 			}
 
+			var wg sync.WaitGroup
 			for _, object := range page.Contents {
-				DownloadLargeObject(bucket, *object.Key, client, path.Join(targetDir, *object.Key))
+				wg.Add(1)
+				go DownloadLargeObject(bucket, *object.Key, client, path.Join(targetDir, *object.Key), &wg)
 			}
-
+			wg.Wait()
 		}
 	}
 }
@@ -251,7 +258,9 @@ func closeFileChecked(file *os.File) {
 	}
 }
 
-func DownloadLargeObject(bucketName string, objectKey string, client s3.Client, targetFile string) {
+func DownloadLargeObject(bucketName string, objectKey string, client s3.Client, targetFile string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	file, err := createFileWithParents(targetFile)
 	if err != nil {
 		log.Fatal(err)
