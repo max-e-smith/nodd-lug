@@ -15,10 +15,8 @@ import (
 func GetDiskUsageEstimate(bucket string, s3client s3.Client, rootPaths []string) (int64, error) {
 	var totalSurveysSize int64 = 0
 
-	fmt.Printf("Getting disk usage estimate from s3 bucket: %s\n", bucket)
-	fmt.Printf("Getting disk usage estimate for root paths: %s\n", rootPaths)
 	for _, surveyRootPath := range rootPaths {
-		fmt.Printf("Getting disk usage estimate for %s\n", surveyRootPath)
+		fmt.Printf("Getting disk usage estimate for %s on s3 bucket %s\n", surveyRootPath, bucket)
 		// TODO paginate
 		result, err := s3client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(bucket),

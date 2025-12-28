@@ -2,11 +2,11 @@ package dcdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/max-e-smith/cruise-lug/cmd/common"
-	"log"
 	"path"
 	"strings"
 	"time"
@@ -20,13 +20,14 @@ type MultibeamRequest struct {
 	S3Client    s3.Client
 	TargetDir   string
 	WorkerCount int
+	Error       error
 }
 
 func logDownloadTime(start time.Time) {
 	fmt.Printf("Download completed in %g hours.\n", common.HoursSince(start))
 }
 
-func (request MultibeamRequest) ResolveSurveys() ([]string, error) {
+func (request *MultibeamRequest) ResolveSurveys() {
 	fmt.Println("Resolving bathymetry data for specified surveys: ", request.Surveys)
 	var surveyPaths []string
 	wantedSurveys := len(request.Surveys)
@@ -39,7 +40,8 @@ func (request MultibeamRequest) ResolveSurveys() ([]string, error) {
 	})
 
 	if ptErr != nil {
-		return surveyPaths, ptErr
+		request.Error = ptErr
+		return
 	}
 
 	for _, platformType := range pt.CommonPrefixes {
@@ -56,9 +58,10 @@ func (request MultibeamRequest) ResolveSurveys() ([]string, error) {
 			platsPage, platsErr := allPlatforms.NextPage(context.TODO())
 
 			if platsErr != nil {
-				log.Fatal(platsErr)
-				return surveyPaths, platsErr
+				request.Error = platsErr
+				return
 			}
+
 			for _, platform := range platsPage.CommonPrefixes {
 				fmt.Printf("  searching %s\n", *platform.Prefix)
 
@@ -73,7 +76,8 @@ func (request MultibeamRequest) ResolveSurveys() ([]string, error) {
 				for platformPaginator.HasMorePages() {
 					surveysPage, err := platformPaginator.NextPage(context.TODO())
 					if err != nil {
-						return surveyPaths, err
+						request.Error = err
+						return
 					}
 
 					for _, survey := range surveysPage.CommonPrefixes {
@@ -90,32 +94,46 @@ func (request MultibeamRequest) ResolveSurveys() ([]string, error) {
 					// short circuit when enough surveys are found
 					fmt.Printf("setting request prefixes to found surveys: %s\n", strings.Join(surveyPaths, ","))
 					request.Prefixes = surveyPaths
-					return surveyPaths, nil
+					return
 				}
 			}
 		}
 	}
 
 	if len(surveyPaths) == 0 {
-		return surveyPaths, fmt.Errorf("no surveys found")
+		fmt.Printf("No matching surveys found for %s\n", request.Surveys)
 	} else {
-		// TODO additional verification of survey match results
+		fmt.Printf("Found %d of %d wanted surveys at: %s\n", len(surveyPaths), len(request.Surveys), surveyPaths)
+		request.Prefixes = surveyPaths
+
 	}
-	fmt.Printf("Found %d of %d wanted surveys at: %s\n", len(surveyPaths), len(request.Surveys), surveyPaths)
-	request.Prefixes = surveyPaths
-	return surveyPaths, nil
+	return
 }
 
-func (request MultibeamRequest) CheckDiskAvailability() error {
+func (request *MultibeamRequest) CheckDiskAvailability() {
+	if request.Error != nil || len(request.Prefixes) == 0 {
+		return
+	}
+
 	bytes, estimateErr := common.GetDiskUsageEstimate(BathyBucket, request.S3Client, request.Prefixes)
 	if estimateErr != nil {
-		return fmt.Errorf("unable to get disk usage estimate from s3 bucket: %w", estimateErr)
+		request.Error = errors.Join(errors.New("unable to get disk usage estimate from s3 bucket"), estimateErr)
+		return
 	}
 
-	return common.DiskSpaceCheck(bytes, request.TargetDir)
+	spaceErr := common.DiskSpaceCheck(bytes, request.TargetDir)
+	if spaceErr != nil {
+		request.Error = spaceErr
+	}
+
+	return
 }
 
-func (request MultibeamRequest) DownloadSurveys() error {
+func (request *MultibeamRequest) DownloadSurveys() {
+	if request.Error != nil || len(request.Prefixes) == 0 {
+		return
+	}
+
 	start := time.Now()
 	defer logDownloadTime(start)
 
@@ -126,7 +144,12 @@ func (request MultibeamRequest) DownloadSurveys() error {
 		TargetDir:   request.TargetDir,
 		WorkerCount: request.WorkerCount,
 	}
-	return order.DownloadFiles()
+
+	if err := order.DownloadFiles(); err != nil {
+		request.Error = err
+	}
+
+	return
 }
 
 func isSurveyMatch(surveys []string, resolvedSurvey string) bool {

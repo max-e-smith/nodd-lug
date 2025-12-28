@@ -11,6 +11,7 @@ import (
 	"github.com/max-e-smith/cruise-lug/cmd/common"
 	"github.com/max-e-smith/cruise-lug/cmd/gets/cruise"
 	"github.com/spf13/cobra"
+	"log"
 )
 
 var multibeam bool
@@ -19,12 +20,6 @@ var wcd bool
 var trackline bool
 
 var s3client s3.Client
-
-type CruiseRequest interface {
-	ResolveSurveys() ([]string, error)
-	CheckDiskAvailability() error
-	DownloadSurveys() error
-}
 
 var cruiseCmd = &cobra.Command{
 	Use:   "cruise",
@@ -55,10 +50,7 @@ var cruiseCmd = &cobra.Command{
 				TargetDir:   targetPath,
 				WorkerCount: 0,
 			}
-			if err := requestMultibeamDownload(request); err != nil {
-				fmt.Println(err)
-				return
-			}
+			requestMultibeamDownload(request)
 		}
 
 		if crowdsourced {
@@ -126,16 +118,13 @@ func verifyUsage(targetPath string) error {
 	return nil
 }
 
-func requestMultibeamDownload(request dcdb.MultibeamRequest) error {
-	if surveys, resolveErr := request.ResolveSurveys(); resolveErr != nil {
-		return resolveErr
-	} else {
-		request.Prefixes = surveys
-	}
+func requestMultibeamDownload(request dcdb.MultibeamRequest) {
 
-	if spaceErr := request.CheckDiskAvailability(); spaceErr != nil {
-		return spaceErr
-	}
+	request.ResolveSurveys()
+	request.CheckDiskAvailability()
+	request.DownloadSurveys()
 
-	return request.DownloadSurveys()
+	if request.Error != nil {
+		log.Fatal(request.Error)
+	}
 }
