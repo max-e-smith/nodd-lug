@@ -1,6 +1,6 @@
-# cruise-lug
+# nodd-lug
 
-CLI tool for downloading marine geophysics survey data from the NOAA Open Data Dissemenation (NODD) hosted cloud.
+CLI tool for downloading datasets from the NOAA Open Data Dissemenation (NODD) hosted cloud using domain driven criterion.
 
 ## installation
 
@@ -13,7 +13,7 @@ Install Go: https://go.dev/doc/install
 TODO
 
 ### Install for your platform
-TODO -- https://goreleaser.com/customization/builds/go/
+FUTURE
 
 ## usage
 clug [command] [options] [survey] [local_path]
