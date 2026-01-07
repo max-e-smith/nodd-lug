@@ -22,8 +22,7 @@ Commands
 - mb
 - csb
 - wcd
-- config
-- update
+- help
 
 Options
 `-b | --bathy`: downloads bathymetry data from specified survey
