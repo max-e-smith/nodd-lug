@@ -1,6 +1,6 @@
-# nodd-lugger
+# cruise-lug
 
-CLI tool for downloading datasets from the NOAA Open Data Dissemenation (NODD) hosted cloud using domain driven criterion.
+CLI tool for downloading mgg geophysics datasets from the NOAA Open Data Dissemenation (NODD) hosted cloud using domain driven criterion.
 
 ## installation
 
