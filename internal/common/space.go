@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/ricochet2200/go-disk-usage/du"
 	"log"
-	"os"
-	"path/filepath"
 )
 
 func getAvailableDiskSpace(localPath string) uint64 {

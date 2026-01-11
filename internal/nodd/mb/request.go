@@ -25,7 +25,6 @@ type MultibeamRequest struct {
 }
 
 func RequestMultibeamDownload(request MultibeamRequest) {
-
 	request.resolveSurveys()
 	request.checkDiskAvailability()
 	request.downloadSurveys()
@@ -136,6 +135,7 @@ func (request *MultibeamRequest) checkDiskAvailability() {
 	if request.Error != nil || len(request.Prefixes) == 0 {
 		return
 	}
+	// TODO get viper check config and return if false
 
 	bytes, estimateErr := common.GetDiskUsageEstimate(BathyBucket, request.S3Client, request.Prefixes)
 	if estimateErr != nil {

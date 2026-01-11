@@ -18,13 +18,25 @@ var s3client s3.Client
 
 var mbCmd = &cobra.Command{
 	Use:   "mb",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Handles multibeam bathymetry data requests",
+	Long: `A cruise-lug command for downloading multibeam bathymetry
+		   data. By default takes one or more survey names and a target
+		   download directory as its arguments. By default will pulls
+		   from the NODD (Noaa Open Data Dissemination) source. Usage:
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+			clug mb <options> <survey name> <survey name> <target directory>
+
+			Options:
+				-v --verbose (default: false)
+					includes additional output in the console.
+				-c --check (default: false)
+					will check local disk space before downloading.
+				-p --parallel <number> (default: 3)
+					determines the number of parallel downloads for a request.
+				-s --source <nodd | nccf> (default: nodd)
+					determines the source of the multibeam data. Currently 
+					only NODD is supported.
+			`,
 	Run: func(cmd *cobra.Command, args []string) {
 		targetPath, surveys := parseArgs(cmd, args)
 		parallelDownloads := getWorkersConfig()
