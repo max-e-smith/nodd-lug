@@ -13,20 +13,21 @@ var parallel int
 
 var RootCmd = &cobra.Command{
 	Use:   "clug",
-	Short: "A simple retrieval tool for ocean datasets hosted by the NODD",
-	Long: `A CLI library for downloading ocean (bathymetry, trackline, and water column)
-	data from the NOAA Open Data Dissemination (NODD) cloud on a survey by survey basis.
-	This simplifies s3 object retrieval, which will almost always need to be downloaded 
-	in batch groups, avoiding downloading each file object manually. 
+	Short: "A domain driven retrieval tool for cruise-based datasets",
+	Long: `A CLI library for downloading ocean data using domain driven criteria using
+	direct access options such as the NOAA Open Data Dissemination (NODD) cloud.
 
-	get, given a survey name argument or path, will download all survey files or 
-	sub-survey files at a given path.
+	mb, will download all multibeam bathymetry data files when given a survey name argument(s), 
+	path (prefix), or file manifest.
 
-	glance will summarize all files and file sizes for an equivalent get command
+	csb, will download all crowdsourced bathymetry data files when given a survey name argument(s), 
+	path (prefix), or file manifest.
 
-	list will display all files that will be downloaded for an equivalent get command
+	wcd, will download all water column data files when given a survey name argument(s), 
+	path (prefix), or file manifest.
 
-	config can be used to change default bucket name and download parameters.`,
+	help, provides usage information for each subcommand.
+	`,
 }
 
 func Execute() {
