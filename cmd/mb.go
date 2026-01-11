@@ -41,7 +41,7 @@ var mbCmd = &cobra.Command{
 		targetPath, surveys := parseArgs(cmd, args)
 		parallelDownloads := getWorkersConfig()
 
-		mb.RequestMultibeamDownload(
+		mb.MultibeamDownload(
 			mb.MultibeamRequest{
 				Surveys:     surveys,
 				S3Client:    s3client,
