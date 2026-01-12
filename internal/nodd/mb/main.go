@@ -50,6 +50,11 @@ func (request *MultibeamRequest) downloadSurveys() {
 	if request.Error != nil || len(request.Prefixes) == 0 {
 		return
 	}
+	dryRun := viper.GetBool("try")
+	if dryRun {
+		fmt.Println("Skipping download due to dry run flag.")
+		return
+	}
 
 	start := time.Now()
 	defer logDownloadTime(start)
