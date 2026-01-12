@@ -9,7 +9,11 @@ import (
 
 var verbose bool
 var check bool
+var background bool
 var parallel int
+var source string
+var manifest string
+var direct string
 
 var RootCmd = &cobra.Command{
 	Use:   "clug",
@@ -41,8 +45,10 @@ func init() {
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Display more verbose output in console output. (default: false)")
 	RootCmd.PersistentFlags().IntVarP(&parallel, "parallel", "p", 3, "Number of parallel downloads. (default: 3, max: 100)")
 	RootCmd.PersistentFlags().BoolVarP(&check, "check", "c", false, "Check local disk space before downloading. (default: true)")
-
-	RootCmd.PersistentFlags().String("source", "s", "A help for foo")
+	RootCmd.PersistentFlags().BoolVarP(&background, "background", "b", false, "Run in background mode. (default: false)")
+	RootCmd.PersistentFlags().StringVarP(&source, "source", "s", "", "Define direct data access source. (default: NODD)")
+	RootCmd.PersistentFlags().StringVarP(&manifest, "manifest", "m", "", "Direct file download by providing a valid manifest. (default: none")
+	RootCmd.PersistentFlags().StringVarP(&direct, "direct", "d", "", "Direct file download by providing a valid direct path. (default: none)")
 
 	vErr := viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 	if vErr != nil {
