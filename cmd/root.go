@@ -14,6 +14,7 @@ var parallel int
 var source string
 var manifest string
 var direct string
+var try bool
 
 var RootCmd = &cobra.Command{
 	Use:   "clug",
@@ -49,6 +50,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&source, "source", "s", "", "Define direct data access source. (default: NODD)")
 	RootCmd.PersistentFlags().StringVarP(&manifest, "manifest", "m", "", "Direct file download by providing a valid manifest. (default: none")
 	RootCmd.PersistentFlags().StringVarP(&direct, "direct", "d", "", "Direct file download by providing a valid direct path. (default: none)")
+	RootCmd.PersistentFlags().BoolVarP(&try, "try", "t", false, "Perform a dry run of command without actually downloading anything. (default: false)")
 
 	vErr := viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 	if vErr != nil {
@@ -63,6 +65,31 @@ func init() {
 	cErr := viper.BindPFlag("check", RootCmd.PersistentFlags().Lookup("check"))
 	if cErr != nil {
 		log.Fatal(cErr)
+	}
+
+	bErr := viper.BindPFlag("background", RootCmd.PersistentFlags().Lookup("background"))
+	if bErr != nil {
+		log.Fatal(bErr)
+	}
+
+	sErr := viper.BindPFlag("source", RootCmd.PersistentFlags().Lookup("source"))
+	if sErr != nil {
+		log.Fatal(sErr)
+	}
+
+	mErr := viper.BindPFlag("manifest", RootCmd.PersistentFlags().Lookup("manifest"))
+	if mErr != nil {
+		log.Fatal(mErr)
+	}
+
+	dErr := viper.BindPFlag("direct", RootCmd.PersistentFlags().Lookup("direct"))
+	if dErr != nil {
+		log.Fatal(dErr)
+	}
+
+	tErr := viper.BindPFlag("try", RootCmd.PersistentFlags().Lookup("try"))
+	if tErr != nil {
+		log.Fatal(tErr)
 	}
 
 }
